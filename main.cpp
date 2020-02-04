@@ -10,6 +10,7 @@ TTF_Font *gFont = NULL;
 const int TOTAL_TEXTURES = 4;
 const int SCREEN_WIDTH = 500;
 const int SCREEN_HEIGHT = 1000;
+const int MENU_WIDTH = 200;
 const int BLOCK_WIDTH = 50;
 const int BLOCK_HEIGHT = 50;
 const int CONTAIN_WIDTH = 5;
@@ -114,7 +115,7 @@ bool init(){
 
   if(SDL_Init(SDL_INIT_VIDEO)<0){printf("SDL Error: %s\n",SDL_GetError()); return false;}
    
-  gWindow = SDL_CreateWindow("Dungeon", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+  gWindow = SDL_CreateWindow("Tetris", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH+MENU_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
   
   if(gWindow == NULL){printf("Window Error: %s\n",SDL_GetError()); return false;}
 
@@ -137,15 +138,20 @@ bool init(){
 bool loadMedia(){
   bool success = true;
   // Load block
+ 
+  gTextures[BACKGROUND] = new LTexture(gRenderer);
+  success &=gTextures[BACKGROUND]->loadFromFile("background.png");
+
   gTextures[SINGLE_BLOCK] = new LTexture(gRenderer);
+  
   success &= gTextures[SINGLE_BLOCK]->loadFromFile("tetrisTile.png");
  
-  gFont = TTF_OpenFont("lazy.ttf",28);
+  gFont = TTF_OpenFont("BebasNeue-Regular.ttf",28);
   success &= gFont!=NULL;
 
   std::string s = "Score";
   gTextures[SCORE_TEXT] = new LTexture(gRenderer);
-  success &= gTextures[SCORE_TEXT]->loadFromRenderedText( s, SDL_Color{0,0,0}, gFont);
+  success &= gTextures[SCORE_TEXT]->loadFromRenderedText( s, SDL_Color{1,1,1}, gFont);
   
   gTextures[START_BUTTON] = new LTexture(gRenderer);
   success &= gTextures[START_BUTTON]->loadFromFile("start_button.png");  
@@ -454,7 +460,7 @@ void dropping(SDL_Rect &camera,int &state){
     dropY += mVelY;
     
     if(outsideScreen(camera)==2 || collideMap()){
-        if(delay>=4){
+        if(delay>=24|| instantDrop){
         delay = 0;
         state = writeToMap();
       }
@@ -488,10 +494,35 @@ void loadBlock(int nBlock){
   }
 
 }
+
 bool updateScore(int& score){
   std::string s = "Score: " + std::to_string(score);
   return gTextures[SCORE_TEXT]->loadFromRenderedText( s, SDL_Color{0,0,0}, gFont);
 }
+
+void renderMini(std::queue<int> &q, SDL_Rect &camera, double scale, int offset){
+  
+  gTextures[SINGLE_BLOCK]->setScale(scale,scale);
+  
+  int accum= 2*offset;
+ 
+  for(int j = 0; j < TOTAL_SHAPES; j++){
+    int blockVal = q.front();
+    q.pop();
+    q.push(blockVal);
+    for(int i = 0; i < 8; i++){
+      if(blockForms[blockVal][i]){
+        int x = (SCREEN_WIDTH+BLOCK_WIDTH)/scale +BLOCK_WIDTH/2 + (i%4)*BLOCK_WIDTH;
+        int y = accum + ((int)(i/4)) * BLOCK_HEIGHT;
+        gTextures[SINGLE_BLOCK]->render(x - camera.x,y - camera.y);
+      }
+    }
+    accum += offset;
+  }
+
+  gTextures[SINGLE_BLOCK]->setScale(1,1);
+}
+
 int main(int argc, char *argv[]){
   if(!init()){ printf("Failed to Initialize!\n"); return 0;}
   if(!loadMedia()){printf("Failed to load Media\n"); return 0;}
@@ -539,14 +570,14 @@ int main(int argc, char *argv[]){
        // toStringMap();
         blockQueue.pop();
         blockQueue.push(rand()%TOTAL_SHAPES);
-        mVelY += score/5;
         state = DROP_BLOCK;
         break;
       case(DROP_BLOCK): if(frame == total_frames) dropping(camera,state); break;
     };
 
-   
-    gTextures[SCORE_TEXT]->render(0,0);
+    gTextures[BACKGROUND]->render(0,0);
+    renderMini(blockQueue,camera,0.5, 3* BLOCK_HEIGHT);  
+    gTextures[SCORE_TEXT]->render(SCREEN_WIDTH+BLOCK_WIDTH,BLOCK_HEIGHT);
     renderBlock(camera);
     placeMap(camera,score,state);
     
